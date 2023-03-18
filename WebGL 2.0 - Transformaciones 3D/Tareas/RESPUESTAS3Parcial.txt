@@ -1,0 +1,235 @@
+<test v="2.0">
+    <p>
+        <t>PteTest Examen Final</t>
+        <d>Programación Virtual</d><a>M.Sc. Reynaldo Zeballos</a>
+        <c>8</c>
+        <e>811387633439152</e>
+        <r>188934750473214</r>
+    </p>
+    <f />
+    <c>
+        <c>
+            <t>0</t>
+            <p>Cómo se entiende MVC en Android:</p>
+            <c>21111</c>
+            <r>
+                <o>Manifest,Layout y Activity</o>
+            </r>
+            <o />
+        </c>
+        <c>
+            <t>1</t>
+            <p>Seleccione las intrucciones correctas de recuperación de valor del Layout:</p>
+            <c>111122</c>
+            <r>
+                <o>TextView pContenido = (TextView) findViewById(R.id.textView6);</o>
+                <o>Button pBoton = (Button) findViewById(R.id.button2);</o>
+            </r>
+            <o /><a>5</a>
+        </c>
+        <c>
+            <t>0</t>
+            <p>Para utilizar gráficos, es preciso crear el siguiente directorio debajo del folder:</p>
+            <c>111112</c>
+            <r>
+                <o>Folder: res Directorio: drawable</o>
+            </r>
+            <o />
+        </c>
+        <c>
+            <t>0</t>
+            <p>Cuando creas un nuevo "layout", este debe ser activado de la siguiente manera:</p>
+            <c>1121</c>
+            <r>
+                <o>startActivity( nuevaVentana );</o>
+            </r>
+            <o />
+        </c>
+        <c>
+            <t>0</t>
+            <p>Para mostrar un mensaje que dure 5 segundos se utiliza:</p>
+            <c>11121</c>
+            <r>
+                <o>Toast.makeText( this, "Aqui va el mensaje", Toast.LENGTH_LONG).show();</o>
+            </r>
+            <o />
+        </c>
+        <c>
+            <t>0</t>
+            <p>LinearLayout (Horizontal)</p>
+            <c>1211</c>
+            <r>
+                <o>Permite organizar elementos del Layout, uno al lado del otro elemento.</o>
+            </r>
+            <o />
+        </c>
+        <c>
+            <t>0</t>
+            <p>android:onClick="match_parent()"</p>
+            <c>1121</c>
+            <r>
+                <o>Es error de sintaxis</o>
+            </r>
+            <o />
+        </c>
+        <c>
+            <t>1</t>
+            <p>La clase "R" que se encuentra en el Folder "gen": (Selecciona dos opciones correctas)</p>
+            <c>22111</c>
+            <r>
+                <o>Describe todos los elementos del layout</o>
+                <o>Se genera automáticamente, toda vez que grabas el layout</o>
+            </r>
+            <o /><a>2</a>
+        </c>
+        <c>
+            <t>1</t>
+            <p>Selecciona las acciones correctas para crear un nuevo layout: (3 opciones)</p>
+            <c>212112</c>
+            <r>
+                <o>Agregar un nuevo "layout" dentro del folder "layout" que esta en "res"</o>
+                <o>Agregar un nuevo "activity" dentro del folder "src"</o>
+                <o>Modificar el archivo "Manifest" y agregar la referencia al nuevo "activity"</o>
+            </r>
+            <o /><a>10</a>
+        </c>
+        <c>
+            <t>1</t>
+            <p>Marca las afirmaciones correctas, respecto al uso de archivos en Android:</p>
+            <c>121221</c>
+            <r>
+                <o>Lo archivos de tipo INTERNO, son aquellos que pueden ser accedidos a través de Asset</o>
+                <o>Cuando utilizas archivos de tipo INTERNO, debes copiarlos en el folder "assets"</o>
+                <o>Cuando utilizas archivos de tipo EXTERNO, debes copiarlos en el SD si usas el emulador</o>
+            </r>
+            <o /><a>15</a>
+        </c>
+        <c>
+            <t>0</t>
+            <p>Cuando usamos "try { } catch ( ) { }" para el control de lectura de archivos texto, usamos:</p>
+            <c>1211</c>
+            <r>
+                <o>IOException</o>
+            </r>
+            <o /><a>5</a>
+        </c>
+        <c>
+            <t>0</t>
+            <p> String Cadena="uno,dos,tres";
+                String Salida[ ] = Cadena.split(",");</p>
+            <c>2111</c>
+            <r>
+                <o>Obtiene un vector string de 3 elementos, donde el primer elemento es "uno".</o>
+            </r>
+            <o /><a>5</a>
+        </c>
+        <c>
+            <t>0</t>
+            <p>Cuando accedemos a un archivo Texto: el comando "BufferedReader":</p>
+            <c>1211</c>
+            <r>
+                <o>Lee el archivo de texto, línea a línea</o>
+            </r>
+            <o /><a>5</a>
+        </c>
+        <c>
+            <t>0</t>
+            <p>Cuando deseamos enviar parámetros a un nuevo layout, utilizamos:</p>
+            <c>21111</c>
+            <r>
+                <o>putExtra( key, value )</o>
+            </r>
+            <o /><a>5</a>
+        </c>
+        <c>
+            <t>0</t>
+            <p>Cuando deseamos activar un nuevo layout, esperando recibir parámetros, utilizamos:</p>
+            <c>12111</c>
+            <r>
+                <o>starActivityForResult( nuevoLayout, códigoControl);</o>
+            </r>
+            <o /><a>5</a>
+        </c>
+        <c>
+            <t>0</t>
+            <p>String planetas = new String[ ] {"Marte", "Tierra", "Mercurio", "Venus"};</p>
+            <c>1121</c>
+            <r>
+                <o>No define nada, porque hay error de sintaxis.</o>
+            </r>
+            <o /><a>5</a>
+        </c>
+        <c>
+            <t>0</t>
+            <p>ArrayAdapter</p>
+            <c>1211</c>
+            <r>
+                <o>Se utiliza para preparar la información que se enviará a un ListView</o>
+            </r>
+            <o />
+        </c>
+        <c>
+            <t>0</t>
+            <p>JSON significa:</p>
+            <c>21111</c>
+            <r>
+                <o>JavaScript Object Notation</o>
+            </r>
+            <o />
+        </c>
+        <c>
+            <t>0</t>
+            <p>Un Web Service:</p>
+            <c>21111</c>
+            <r>
+                <o>Permite acceder a un servidor web vía procedimientos específicos</o>
+            </r>
+            <o />
+        </c>
+        <c>
+            <t>0</t>
+            <p>El método Scanner, se utiliza para:</p>
+            <c>1211</c>
+            <r>
+                <o>Lectura de archivos para enviar a otros medios</o>
+            </r>
+            <o />
+        </c>
+        <c>
+            <t>0</t>
+            <p>Utilizamos el Spinner para:</p>
+            <c>1211</c>
+            <r>
+                <o>Mostrar una serie de opciones y seleccionar una</o>
+            </r>
+            <o />
+        </c>
+        <c>
+            <t>0</t>
+            <p>Environment.getExternalStorageEstate()</p>
+            <c>1121</c>
+            <r>
+                <o>Es MEDIA_MOUNTED si existe una SD card instalada</o>
+            </r>
+            <o /><a>5</a>
+        </c>
+        <c>
+            <t>0</t>
+            <p>El comando "finish();" tiene la funcionalidad de:</p>
+            <c>2111</c>
+            <r>
+                <o>Terminar la ejecución del Layout Actual</o>
+            </r>
+            <o />
+        </c>
+        <c>
+            <t>0</t>
+            <p>Para cuando vamos a utilizar un archivo de tipo OUTSIDE:</p>
+            <c>11112</c>
+            <r>
+                <o>Es necesario descargar el archivo en /mnt/sdcard</o>
+            </r>
+            <o /><a>10</a>
+        </c>
+    </c>
+</test>

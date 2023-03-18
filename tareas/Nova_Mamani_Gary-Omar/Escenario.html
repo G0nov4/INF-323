@@ -1,0 +1,862 @@
+<html>
+    <head>
+
+    </head>
+    <body>
+        <h2>WebGL 2.0</h2>
+        <h1>Gary Omar Nova Mamani</h1>
+        <canvas id="webglcanvas" style="border: none; margin: 0 auto;" width="800" height="800"></canvas>
+        <!--
+        /***************************************************************************/
+        /* Paso 0: Se define los shaders                                           */
+        /***************************************************************************/
+        -->
+  
+        <script id = "vs" type="vertex">
+            #version 300 es
+            precision mediump float;
+            uniform mat4 uMatrizProyeccion;
+            uniform mat4 uMatrizVista;
+            uniform mat4 uMatrizModelo;
+            layout(location = 0) in vec2 aVertices;
+            void main(){
+                gl_Position = uMatrizProyeccion*uMatrizVista*uMatrizModelo*vec4(aVertices, 0.0, 1.0);
+            }
+            // (x,y,z,w)
+        </script>
+        <script id = "fs" type="fragment">
+            #version 300 es
+            precision highp float;
+            uniform vec4 uColor;
+            out vec4 color;
+            void main(){
+                color = uColor;
+            }
+        </script>
+        <script>
+            
+            var circulo;
+            var planeta;
+            var luna;
+            var principe;
+
+            /* Variables uniformes */
+            var uMatrizProyeccion;
+            var uMatrizVista;
+            var uMatrizModelo;
+            var uColor;
+
+            /* Matrices */
+            var MatrizProyeccion = new Array(16);
+            var MatrizVista = new Array(16);
+            var MatrizModelo = new Array(16);
+
+            /***************************************************************************/
+            /* Transformaciones mediante matrices                                      */
+            /***************************************************************************/
+
+            /* Convierte de grados a radianes */
+            function toRadians(grados) {
+                return grados * Math.PI / 180;
+            };
+
+            /* Matriz Identidad */
+            function identidad(r) {
+                r[0] = 1; r[4] = 0; r[ 8] = 0; r[12] = 0;
+                r[1] = 0; r[5] = 1; r[ 9] = 0; r[13] = 0;
+                r[2] = 0; r[6] = 0; r[10] = 1; r[14] = 0;
+                r[3] = 0; r[7] = 0; r[11] = 0; r[15] = 1;
+            }
+
+            /* Traslación - glTranslatef */
+            function traslacion(matriz, tx, ty, tz) {
+                var r = new Array(16);
+                r[0] = 1; r[4] = 0; r[ 8] = 0; r[12] = tx;
+                r[1] = 0; r[5] = 1; r[ 9] = 0; r[13] = ty;
+                r[2] = 0; r[6] = 0; r[10] = 1; r[14] = tz;
+                r[3] = 0; r[7] = 0; r[11] = 0; r[15] =  1;
+                multiplica(matriz, matriz, r);
+            }
+
+            /* Escalación - glScalef */
+            function escalacion(matriz, sx, sy, sz) { 
+                var r = new Array(16);
+                r[0] = sx; r[4] =  0; r[ 8] =  0; r[12] =  0;
+                r[1] =  0; r[5] = sy; r[ 9] =  0; r[13] =  0;
+                r[2] =  0; r[6] =  0; r[10] = sz; r[14] =  0;
+                r[3] =  0; r[7] =  0; r[11] =  0; r[15] =  1;
+                multiplica(matriz, matriz, r);
+            }
+
+            /* Rotación sobre X - glRotatef */
+            function rotacionX(matriz, theta){
+                let r = new Array(16);
+                var c = Math.cos(toRadians(theta));
+                var s = Math.sin(toRadians(theta));
+                r[0] =  1; r[4] =  0; r[ 8] =  0; r[12] = 0;
+                r[1] =  0; r[5] =  c; r[ 9] = -s; r[13] = 0;
+                r[2] =  0; r[6] =  s; r[10] =  c; r[14] = 0;
+                r[3] =  0; r[7] =  0; r[11] =  0; r[15] = 1;
+                multiplica(matriz, matriz, r); 
+            }
+
+            /* Rotación sobre Y - glRotatef */
+            function rotacionY(matriz, theta){
+                let r = new Array(16);
+                var c = Math.cos(toRadians(theta));
+                var s = Math.sin(toRadians(theta));
+                r[0] =  c; r[4] =  0; r[ 8] =  s; r[12] = 0;
+                r[1] =  0; r[5] =  1; r[ 9] =  0; r[13] = 0;
+                r[2] = -s; r[6] =  0; r[10] =  c; r[14] = 0;
+                r[3] =  0; r[7] =  0; r[11] =  0; r[15] = 1;
+                multiplica(matriz, matriz, r);
+            }
+        
+            /* Rotación sobre Z - glRotatef */
+            function rotacionZ(matriz, theta){
+                let r = new Array(16);
+                var c = Math.cos(toRadians(theta));
+                var s = Math.sin(toRadians(theta));
+                r[0] =  c; r[4] = -s; r[ 8] =  0; r[12] = 0;
+                r[1] =  s; r[5] =  c; r[ 9] =  0; r[13] = 0;
+                r[2] =  0; r[6] =  0; r[10] =  1; r[14] = 0;
+                r[3] =  0; r[7] =  0; r[11] =  0; r[15] = 1;
+                multiplica(matriz, matriz, r);
+            }
+
+            /* Proyección Paralela - glOrtho */
+            function ortho(r, izq, der, abj, arr, cerca, lejos) {
+                r[0] = 2/(der - izq); r[4] =             0; r[ 8] =                  0; r[12] =         -(der + izq)/(der - izq);
+                r[1] =             0; r[5] = 2/(arr - abj); r[ 9] =                  0; r[13] =         -(arr + abj)/(arr - abj);
+                r[2] =             0; r[6] =             0; r[10] = -2/(lejos - cerca); r[14] = -(lejos + cerca)/(lejos - cerca);
+                r[3] =             0; r[7] =             0; r[11] =                  0; r[15] =                                1;
+            }
+
+            /* Proyección Perspectiva - glFrustum */
+            function frustum(r, izq, der, abj, arr, cerca, lejos) {
+                r[0] = 2*cerca/(der-izq); r[4] =                 0; r[ 8] =          (der+izq)/(der-izq); r[12] =                            0;
+                r[1] =                 0; r[5] = 2*cerca/(arr-abj); r[ 9] =          (arr+abj)/(arr-abj); r[13] =                            0;
+                r[2] =                 0; r[6] =                 0; r[10] = -(lejos+cerca)/(lejos-cerca); r[14] = -2*lejos*cerca/(lejos-cerca);
+                r[3] =                 0; r[7] =                 0; r[11] =                           -1; r[15] =                            0;
+            }
+
+            /* Proyección Perspectiva - gluPerspective */
+            function perspective(r, fovy, aspecto, cerca, lejos) {
+                var ang = fovy * 0.5;
+                var f = (Math.abs(Math.sin(toRadians(ang))) < 1e-8 ? 0 : 1) / Math.tan(toRadians(ang));
+                r[0] = f/aspecto; r[4] = 0; r[ 8] =                                  0; r[12] =                                       0;
+                r[1] =         0; r[5] = f; r[ 9] =                                  0; r[13] =                                       0;
+                r[2] =         0; r[6] = 0; r[10] = -(lejos + cerca) / (lejos - cerca); r[14] =  -2.0 * lejos * cerca / (lejos - cerca);
+                r[3] =         0; r[7] = 0; r[11] =                              - 1.0; r[15] =                                       0;
+            }
+
+            /* Multiplicación de matrices de 4 x 4 */
+            function multiplica(c, a, b) {
+                let r = new Array(16);
+                let i, j, k;
+                for (i = 0; i < 4; i++){
+                    for (j = 0; j < 4; j++){
+                    let s = 0;
+                    for (k = 0; k < 4; k++)
+                        s = s + a[i + k * 4] * b[k + j * 4];
+                        r[i + j * 4] = s;
+                    }
+                    }
+                for (i = 0; i < 16; i++)
+                    c[i] = r[i];
+            }
+
+            class Circulo {
+                constructor(gl, radio) {
+        
+                    /* Las coordenadas cartesianas (x, y) */
+                    var vertices = [
+
+                    ];
+
+                    /* Lee los vértices (x,y) y colores (r,g,b,a) */
+                    for (var i = 0; i < 360; i++) {
+                    vertices.push(radio * Math.cos(i * Math.PI / 180));
+                    vertices.push(radio * Math.sin(i * Math.PI / 180));
+                    }
+                    this.circuloVAO = gl.createVertexArray();
+
+                    gl.bindVertexArray(this.circuloVAO);
+                    var codigoVertices = gl.createBuffer();
+                    gl.bindBuffer(gl.ARRAY_BUFFER, codigoVertices);
+                    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW);
+                    gl.enableVertexAttribArray(0);
+                    gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+
+                    gl.bindVertexArray(null);
+                    gl.bindBuffer(gl.ARRAY_BUFFER, null);
+                }
+
+                dibuja(gl, llenado) {
+                  identidad(MatrizModelo);
+                traslacion(MatrizModelo,0 ,0,0);
+                gl.uniformMatrix4fv(uMatrizModelo, false, MatrizModelo);
+
+                gl.uniform4f(uColor, 0, 1, 1, 1);
+                  console.log(this.circuloVAO);
+                    gl.bindVertexArray(this.circuloVAO);
+                    gl.drawArrays((llenado) ? gl.TRIANGLE_FAN : gl.LINE_LOOP, 0, 360);
+                    gl.bindVertexArray(null);
+                }
+            }
+            class Planeta{
+              constructor(gl){
+                console.log("creando planeta")
+                /* DEFINIMOS LAS VARIABLES D ELOS VERTICES */
+                var vertices = [
+                    -2.59,  0.77, // C
+                    -5.28, -3.86, // D
+                    -3.67, -3.79, // E
+
+                    -5.28, -3.86, // D
+                    -3.67, -3.79, // E
+                    -2.61, -8.29, // F
+
+                    -2.59,  0.77, // C
+                    -3.67, -3.79, // E
+                    -0.19, -1.86, // L
+
+                    -3.67, -3.79, // E
+                    -0.19, -1.86, // L
+                    -0.21, -5.57, // G
+
+                    -3.67, -3.79, // E
+                    -0.21, -5.57, // G
+                    -2.61, -8.29, // F
+
+                    -0.21, -5.57, // G
+                    -2.61, -8.29, // F
+                     2.47, -8.33, // H
+
+                    -2.59,  0.77, // C
+                    -0.19, -1.86, // L
+                     2.53,  0.81, // K
+
+                    -0.19, -1.86, // L
+                     2.53,  0.81, // K
+                     3.74, -3.77, // I
+
+                    -0.19, -1.86, // L
+                     3.74, -3.77, // I
+                    -0.21, -5.57, // G
+
+                     3.74, -3.77, // I
+                    -0.21, -5.57, // G
+                     2.47, -8.33, // H
+
+                     2.53,  0.81, // K
+                     3.74, -3.77, // I
+                     5.23, -3.79, // J
+
+                     3.74, -3.77, // I
+                     5.23, -3.79, // J
+                     2.47, -8.33, // H
+                ];
+
+                this.trianguloVAO = gl.createVertexArray();
+                gl.bindVertexArray(this.trianguloVAO);
+
+                var codigoVertices = gl.createBuffer();
+                gl.bindBuffer(gl.ARRAY_BUFFER, codigoVertices);
+                gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW);
+                gl.enableVertexAttribArray(0);
+                gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+
+                gl.bindVertexArray(null);
+                gl.bindBuffer(gl.ARRAY_BUFFER, null);              }
+              dibuja(gl){
+                console.log("dibujando planeta")
+                /***************************************************************************/
+                /* Paso 4: Renderizamos.                                                   */
+                /***************************************************************************/
+                  // Matriz de Modelo TRIANGULO
+                identidad(MatrizModelo);
+                traslacion(MatrizModelo, 0, 0, 0);
+                gl.uniformMatrix4fv(uMatrizModelo, false, MatrizModelo);
+                gl.uniform4f(uColor, 71.0/255.0,129.0/255.0,154.0/255.0,1.0);
+                gl.bindVertexArray(this.trianguloVAO);
+                gl.drawArrays(gl.TRIANGLES, 0, 3);
+                gl.bindVertexArray(null);
+
+                identidad(MatrizModelo);
+                traslacion(MatrizModelo, 0, 0, 0);
+                gl.uniformMatrix4fv(uMatrizModelo, false, MatrizModelo);
+                gl.uniform4f(uColor, 239.0/255.0,139.0/255.0,140.0/255.0,1.0);
+                gl.bindVertexArray(this.trianguloVAO);
+                gl.drawArrays(gl.TRIANGLES, 3, 3);
+                gl.bindVertexArray(null);
+
+                identidad(MatrizModelo);
+                traslacion(MatrizModelo, 0, 0, 0);
+                gl.uniformMatrix4fv(uMatrizModelo, false, MatrizModelo);
+                gl.uniform4f(uColor, 61.0/255.0,101.0/255.0,137.0/255.0,1.0);
+                gl.bindVertexArray(this.trianguloVAO);
+                gl.drawArrays(gl.TRIANGLES, 6,3);
+                gl.bindVertexArray(null);
+
+                identidad(MatrizModelo);
+                traslacion(MatrizModelo, 0, 0, 0);
+                gl.uniformMatrix4fv(uMatrizModelo, false, MatrizModelo);
+                gl.uniform4f(uColor, 82.0/255.0,71.0/255.0,125.0/255.0,1.0);
+                gl.bindVertexArray(this.trianguloVAO);
+                gl.drawArrays(gl.TRIANGLES, 9, 3);
+                gl.bindVertexArray(null);
+                identidad(MatrizModelo);
+                traslacion(MatrizModelo, 0, 0, 0);
+                gl.uniformMatrix4fv(uMatrizModelo, false, MatrizModelo);
+                gl.uniform4f(uColor, 231.0/255.0,110.0/255.0,124.0/255.0,1.0);
+                gl.bindVertexArray(this.trianguloVAO);
+                gl.drawArrays(gl.TRIANGLES, 12, 3);
+                gl.bindVertexArray(null);
+
+                identidad(MatrizModelo);
+                traslacion(MatrizModelo, 0, 0, 0);
+                gl.uniformMatrix4fv(uMatrizModelo, false, MatrizModelo);
+                gl.uniform4f(uColor, 222.0/255.0,62.0/255.0,82.0/255.0,1.0);
+                gl.bindVertexArray(this.trianguloVAO);
+                gl.drawArrays(gl.TRIANGLES, 15, 3);
+                gl.bindVertexArray(null);
+                identidad(MatrizModelo);
+                traslacion(MatrizModelo, 0, 0, 0);
+                gl.uniformMatrix4fv(uMatrizModelo, false, MatrizModelo);
+                gl.uniform4f(uColor, 77.0/255.0,155.0/255.0,149.0/255.0,1.0);
+                gl.bindVertexArray(this.trianguloVAO);
+                gl.drawArrays(gl.TRIANGLES, 18, 3);
+                gl.bindVertexArray(null);
+
+                identidad(MatrizModelo);
+                traslacion(MatrizModelo, 0, 0, 0);
+                gl.uniformMatrix4fv(uMatrizModelo, false, MatrizModelo);
+                gl.uniform4f(uColor, 139.0/255.0,178.0/255.0,70.0/255.0,1.0);
+                gl.bindVertexArray(this.trianguloVAO);
+                gl.drawArrays(gl.TRIANGLES, 21, 3);
+                gl.bindVertexArray(null);
+                identidad(MatrizModelo);
+                traslacion(MatrizModelo, 0, 0, 0);
+                gl.uniformMatrix4fv(uMatrizModelo, false, MatrizModelo);
+                gl.uniform4f(uColor, 164.0/255.0,52.0/255.0,77.0/255.0,1.0);
+                gl.bindVertexArray(this.trianguloVAO);
+                gl.drawArrays(gl.TRIANGLES, 24, 3);
+                gl.bindVertexArray(null);
+
+                identidad(MatrizModelo);
+                traslacion(MatrizModelo, 0, 0, 0);
+                gl.uniformMatrix4fv(uMatrizModelo, false, MatrizModelo);
+                gl.uniform4f(uColor, 202.0/255.0,48.0/255.0,83.0/255.0,1.0);
+                gl.bindVertexArray(this.trianguloVAO);
+                gl.drawArrays(gl.TRIANGLES, 27, 3);
+                gl.bindVertexArray(null);
+                identidad(MatrizModelo);
+                traslacion(MatrizModelo, 0, 0, 0);
+                gl.uniformMatrix4fv(uMatrizModelo, false, MatrizModelo);
+                gl.uniform4f(uColor, 239.0/255.0,173.0/255.0,59.0/255.0,1.0);
+                gl.bindVertexArray(this.trianguloVAO);
+                gl.drawArrays(gl.TRIANGLES, 30, 3);
+                gl.bindVertexArray(null);
+
+                identidad(MatrizModelo);
+                traslacion(MatrizModelo, 0, 0, 0);
+                gl.uniformMatrix4fv(uMatrizModelo, false, MatrizModelo);
+                gl.uniform4f(uColor, 241.0/255.0,125.0/255.0,49.0/255.0,1.0);
+                gl.bindVertexArray(this.trianguloVAO);
+                gl.drawArrays(gl.TRIANGLES, 33, 3);
+                gl.bindVertexArray(null);
+    
+              }
+            }
+
+
+            class Zorro{
+              constructor(gl){
+                console.log("creando planeta")
+                /* DEFINIMOS LAS VARIABLES D ELOS VERTICES */
+                var vertices = [
+                0.8199088775238,2.6849003950029, // C0
+                0.5628099755601,3.0291514671237, // D1
+                0.5018034564501,3.3254688456582, // E2
+                0.6978958393038,2.989932990553,  // F3
+                0.9767827838068,2.6391455056703, // G4
+                0.8157170184227,2.1029204340883, // H5
+                0.8969062493285,1.728547869356,  // I6
+                1.0592847111401,1.3361332533113, // J7
+                1.0457531726558,2.2968724856966, // K8
+                0.5853924324608,3.467503573255,  // L9
+                0.8922122177639,3.308077606382,  // M10
+                1.1114924076919,3.638975462797,  // N11
+                1.1451132664863,3.297163398387,  // O12
+                1.386062754513,3.5044920276193,  // P13
+                1.3748558015815,3.005782622168,  // Q14
+                1.4140801368417,2.697591416553,  // R15
+                1.5821844308138,2.333365446280,  // S16
+                1.9576173540182,1.907501234884,  // T17
+                2.1649459832505,1.419998782365,  // U18
+                2.2097737949764,0.977324141571,  // V19
+                2.366671136017,1.3471535883105,  // W20
+                2.1593425067847,1.745000417377,  // Z21
+                1.9127895422923,2.148450722910, //A_{1}: (22)
+                1.7951165365118,2.563107981375, //B_{1}: (23)
+                1.7783061071146,2.748022704744, //C_{1}: (24)
+                1.8636915043942,2.835303414079, //D_{1}: (25)
+                1.9660522506073,2.655624780748, //E_{1}: (26)
+                2.4545301955425,2.340149441311, //F_{1}: (27)
+                2.7089457918629,1.927996175272, //G_{1}: (28)
+                2.7191224157157,1.429341606484, //H_{1}: (29)
+                2.5817379937027,1.022276652371, //I_{1}: (30)
+                2.312057461603,0.7525961202721, //J_{1}: (31)
+                2.0220236817978,0.676271441376, //K_{1}: (32)
+                1.3300132598062,0.788214303757, //L_{1}: (33)
+                1.2534759255379,0.627434999166, //M_{1}: (34)
+                1.0258957349743,0.660269952034, //N_{1}: (35)
+                1.0360858927607,0.739526734817, //O_{1}: (36)
+                1.1504421079195,0.755378091374, //P_{1}: (37)
+                1.1742191427545,0.883321183581, //Q_{1}: (38)
+                1.0972268394793,1.046363708164, //R_{1}: (39)
+                1.0292924542364,0.827841435633, //S_{1}: (40)
+                0.8045265501264,0.843116788339, //T_{1}: (41)
+                0.8198019028329,0.921675745116, //U_{1}: (42)
+                0.9070896325843,0.921675745116, //V_{1}: (43)
+                ];
+
+                var indices = [
+
+                  // Pecho del lobo
+                    2,1,3,
+                    1,3,0,
+                    3,0,4,
+                    0,4,8,
+                    0,5,8,
+                    8,5,6,
+                    6,7,8,
+
+                  // Cuerpo de lobo
+                    2,3,9,
+                    3,9,10,
+                    10,11,12,//10
+                    3,10,12,
+                    3,12,14,
+                    3,14,15,
+                    3,15,4,
+                    12,13,14,
+                    4,15,16,
+                    4,16,8,
+                    8,16,17,
+                    8,17,18, // 20
+                    8,18,19,
+                    8,19,32,
+                    8,32,33,
+                    8,33,38,
+                    8,33,39,
+                    8,33,7,
+
+                    // PATITA,
+                    6,7,43,
+                    7,43,39,
+                    43,39,40,
+                    43,40,42,
+                    40,41,42,
+
+                    // OTRA PATITA
+                    38,33,37,
+                    37,33,34,
+                    37,34,35,
+                    37,38,39,
+
+                    // Cola
+                    32,18,31,
+                    18,31,30,
+                    18,30,20,
+                    20,30,29,
+                    20,29,21,
+                    21,29,28,
+                    21,28,22,
+                    22,28,27,
+                    22,27,23,
+                    23,27,26,
+                    23,26,24,
+                    24,26,25,
+
+                ]
+                this.trianguloVAO = gl.createVertexArray();
+                gl.bindVertexArray(this.trianguloVAO);
+
+                var codigoVertices = gl.createBuffer();
+                gl.bindBuffer(gl.ARRAY_BUFFER, codigoVertices);
+                gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW);
+                gl.enableVertexAttribArray(0);
+                gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+
+                var codigoDeIndices = gl.createBuffer();
+                gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, codigoDeIndices);
+                gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(indices), gl.STATIC_DRAW);
+
+                gl.bindVertexArray(null);
+                gl.bindBuffer(gl.ARRAY_BUFFER, null);
+                gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, null);         
+              }
+              dibuja(gl){
+                console.log("dibujando parte de zorrito")
+                identidad(MatrizModelo);
+                gl.uniformMatrix4fv(uMatrizModelo, false, MatrizModelo);
+                // Añadir color uniforme
+                gl.uniform4f(uColor, 241.0/255.0,123.0/255.0,51.0/255.0,1.0);
+                gl.bindVertexArray(this.trianguloVAO);
+
+                gl.drawElements(gl.TRIANGLES,138, gl.UNSIGNED_SHORT, 0);
+                gl.bindVertexArray(null);
+                
+              }
+            }
+
+            class Principe{
+              constructor(gl){
+                console.log("creando principe")
+                /* DEFINIMOS LAS VARIABLES D ELOS VERTICES */
+                var vertices = [];
+
+                    /* Lee los vértices (x,y) y colores (r,g,b,a) */
+                for (var i = 0; i < 360; i++) {
+                  vertices.push(0.8 * Math.cos(i * Math.PI / 180));
+                  vertices.push(0.8 * Math.sin(i * Math.PI / 180));
+                }
+
+                vertices.push(
+                  // Cara
+                  -1.1947845486829,4.4241220260604,// K: (0)
+                  -1.2834210162131,4.2511227098051,// J: (1)
+                  -1.9996036738575,4.3681228469451,// I: (2)
+                  -1.9038762889248,4.6241230297983,// H: (3)
+                  -2.0416461623925,4.7531362144529,// G: (4)
+                  -1.9685920296034,4.8800197082445,// F: (5)
+                  -1.8258761974982,4.8120323409624,// E: (6)
+                  -1.7407851886692,4.9077597258951,// D: (7)
+                  -1.0813298702442,4.7765777539503,// C: (8)
+                  -1.1232071370155,4.5708557199786,// L: (9)
+                ); 
+
+                vertices.push(
+                  // Cuerpo
+                  -1.912448851714,4.0122521637356, // M: (0)
+                  -2.2396306363428,4.077092406783, // N: (1)
+                  -2.3711693228898,3.782036116143, // P: (3)
+                  -2.4514666657336,3.392020450901, // Q: (4)
+                  -2.4629377147112,2.937002174787, // R: (5)
+                  -2.4610356335712,2.373288175368, // S: (6)
+                  -2.419644366708,1.7819843630375, // T: (7)
+                  -2.2895575279952,0.936419911404, // U: (8)
+                  -1.6213842200611,0.983724216390, // B_{1}: (13)
+                  -1.4262539619918,1.716940943681, // A_{1}: (12)
+                  -1.3020801614023,2.538853242821, // Z: (11)
+                  -1.2606888945391,3.283896046358, // W: (10)
+                  -1.3020801614023,3.703721753113, // V: (9)
+                  -1.4,4,                          // O: (2)
+
+                  -2.3071230269107,0.70038775233, // H: ()
+                  -2.3215549168811,0.92167673879, // D: ()
+                  -1.6769304982011,0.99383618862, // E: ()
+                  -1.4363989986937,0.83989602894, // F: ()
+                  -1.4363989986937,0.70038775933, // G: ()
+
+
+                  -2.2038871106512,2.02707708062, //F: ()
+                  -2.380188594516,2.140938455619, //G: ()
+                  -2.4683393364484,2.35029646770, //C: ()
+                  -2.0275856267863,2.33560467738, //D: ()
+                  -2.05329625985,2.1262466652972, //E: ()
+
+
+                  -1.9828611876477,2.4782570751629, //E: ()
+                  -1.9416338347771,2.7136519609079, //D: ()
+                  -1.2992850787612,2.7163117901254, //C: ()
+                  -1.3125842248485,2.4649579290757, //F: ()
+
+                  // CHALINA
+                  -1.7848714062889,3.955446549040, // C: ()
+                  -1.7631288876508,4.346811884527, // D: ()
+                  -1.2920409838248,4.325069365889, // E: ()
+                  -1.3935060708027,3.991684080104, // F: ()
+
+                  -2.2704543225404,4.122139191933, // G: ()
+                  -2.3066918536039,4.499009514994, // H: ()
+                  -1.7631288876508,4.346811884527, // D: ()
+                  -1.7848714062889,3.955446549040, // C: ()
+
+                  -3,4.5,                          // I: ()
+                  -2.7560372387918,4.890374850480, // J: ()
+                  -2.3066918536039,4.499009514994, // H: ()
+                  -2.2704543225404,4.122139191933, // G: ()
+
+                  -2.7632847450045,5.3034827046046,//L: ()
+                  -2.7560372387918,4.8903748504802,//J: ()
+                  -3,4.5,                          //I: ()
+                  -3.2271251426178,5.173027592778, // K: ()
+                  -3.2148483449097,5.685215477906, // N: ()
+                  -2.7777797574299,5.905025720259, // M: ()
+
+                  -3.4436617188939,5.888605143669, //R: ()
+                  -3.7741699257601,6.058096531806, //Q: ()
+                  -3.4267125800803,6.380130169265, //P: ()
+                  -3.1131535120278,6.236062489349, //O: ()
+                  -2.7777797574299,5.905025720259, //M: ()
+                  -3.2148483449097,5.685215477906, //N: ()
+
+                  -3.9771318819185,6.4284203653878, // S: ()
+                  -4.2911154471201,6.6357680027851, // T: ()
+                  -3.8764201723256,6.9912210954661, // U: ()
+                  -3.6157545710261,6.6298437845737, // V: ()
+                  -3.4267125800803,6.3801301692655, // P: ()
+                  -3.7741699257601,6.0580965318062, // Q: ()
+
+
+                ); 
+
+                vertices.push(
+                0.8199088775238,2.6849003950029, // C0
+                0.5628099755601,3.0291514671237, // D1
+                0.5018034564501,3.3254688456582, // E2
+                0.6978958393038,2.989932990553,  // F3
+                0.9767827838068,2.6391455056703, // G4
+                0.8157170184227,2.1029204340883, // H5
+                0.8969062493285,1.728547869356,  // I6
+                1.0592847111401,1.3361332533113, // J7
+                1.0457531726558,2.2968724856966, // K8
+                )
+
+                console.log(vertices)
+
+
+
+                this.trianguloVAO = gl.createVertexArray();
+                gl.bindVertexArray(this.trianguloVAO);
+
+                var codigoVertices = gl.createBuffer();
+                gl.bindBuffer(gl.ARRAY_BUFFER, codigoVertices);
+                gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW);
+                gl.enableVertexAttribArray(0);
+                gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+
+                gl.bindVertexArray(null);
+                gl.bindBuffer(gl.ARRAY_BUFFER, null);              
+              }
+              dibuja(gl){
+                console.log("dibujando principe")
+                /***************************************************************************/
+                /* Paso 4: Renderizamos.                                                   */
+                /***************************************************************************/
+                  // Matriz de Modelo CABEZa
+                identidad(MatrizModelo);
+                traslacion(MatrizModelo, -1.82, 5.12,0);
+                gl.uniformMatrix4fv(uMatrizModelo, false, MatrizModelo);
+                gl.uniform4f(uColor, 241.0/255.0, 172.0/255.0, 56.0/255.0,1.0);
+                gl.bindVertexArray(this.trianguloVAO);
+                gl.drawArrays((true) ? gl.TRIANGLE_FAN : gl.LINE_LOOP, 0, 360);
+                gl.bindVertexArray(null);
+
+                // CARA
+                identidad(MatrizModelo);
+                gl.uniformMatrix4fv(uMatrizModelo, false, MatrizModelo);
+                gl.uniform4f(uColor,239.0/255.0,137.0/255.0,143.0/255.0,1.0);
+                gl.bindVertexArray(this.trianguloVAO);
+                gl.drawArrays(gl.TRIANGLE_FAN, 360, 10);
+                gl.bindVertexArray(null);
+
+                // CUERPO
+                identidad(MatrizModelo);
+                gl.uniformMatrix4fv(uMatrizModelo, false, MatrizModelo);
+                gl.uniform4f(uColor,136.0/255.0,179.0/255.0, 69.0/255.0,1.0);
+                gl.bindVertexArray(this.trianguloVAO);
+                gl.drawArrays(gl.TRIANGLE_FAN, 370, 14);
+                gl.bindVertexArray(null);
+
+                //PIE
+                identidad(MatrizModelo);
+                gl.uniformMatrix4fv(uMatrizModelo, false, MatrizModelo);
+                gl.uniform4f(uColor,227.0/255.0,150.0/255.0, 128.0/255.0,1.0);
+                gl.bindVertexArray(this.trianguloVAO);
+                gl.drawArrays(gl.TRIANGLE_FAN, 384, 5);
+                gl.bindVertexArray(null);
+
+                      //MANO
+                identidad(MatrizModelo);
+                gl.uniformMatrix4fv(uMatrizModelo, false, MatrizModelo);
+                gl.uniform4f(uColor,227.0/255.0,150.0/255.0, 128.0/255.0,1.0);
+                gl.bindVertexArray(this.trianguloVAO);
+                gl.drawArrays(gl.TRIANGLE_FAN, 389, 5);
+                gl.bindVertexArray(null);
+
+                identidad(MatrizModelo);
+                gl.uniformMatrix4fv(uMatrizModelo, false, MatrizModelo);
+                gl.uniform4f(uColor,60.0/255.0,44.0/255.0, 39.0/255.0,1.0);
+                gl.bindVertexArray(this.trianguloVAO);
+                gl.drawArrays(gl.TRIANGLE_FAN, 394, 4);
+                gl.bindVertexArray(null);
+
+                // CHALINA
+                identidad(MatrizModelo);
+                gl.uniformMatrix4fv(uMatrizModelo, false, MatrizModelo);
+                gl.uniform4f(uColor,76.0/255.0,156.0/255.0, 150.0/255.0,1.0);
+                gl.bindVertexArray(this.trianguloVAO);
+                gl.drawArrays(gl.TRIANGLE_FAN, 398, 4);
+                gl.bindVertexArray(null);
+                identidad(MatrizModelo);
+                gl.uniformMatrix4fv(uMatrizModelo, false, MatrizModelo);
+                gl.uniform4f(uColor,69.0/255.0,132.0/255.0, 146.0/255.0,1.0);
+                gl.bindVertexArray(this.trianguloVAO);
+                gl.drawArrays(gl.TRIANGLE_FAN, 402, 4);
+                gl.bindVertexArray(null);
+                identidad(MatrizModelo);
+                gl.uniformMatrix4fv(uMatrizModelo, false, MatrizModelo);
+                gl.uniform4f(uColor,58.0/255.0,102.0/255.0, 140.0/255.0,1.0);
+                gl.bindVertexArray(this.trianguloVAO);
+                gl.drawArrays(gl.TRIANGLE_FAN, 406, 4);
+                gl.bindVertexArray(null);
+
+                identidad(MatrizModelo);
+                gl.uniformMatrix4fv(uMatrizModelo, false, MatrizModelo);
+                gl.uniform4f(uColor,50.0/255.0, 85.0/255.0, 117.0/255.0,1.0);
+                gl.bindVertexArray(this.trianguloVAO);
+                gl.drawArrays(gl.TRIANGLE_FAN, 410, 6);
+                gl.bindVertexArray(null);
+                identidad(MatrizModelo);
+                gl.uniformMatrix4fv(uMatrizModelo, false, MatrizModelo);
+                gl.uniform4f(uColor,19.0/255.0, 59.0/255.0, 85.0/255.0,1.0);
+                gl.bindVertexArray(this.trianguloVAO);
+                gl.drawArrays(gl.TRIANGLE_FAN, 416, 6);
+                gl.bindVertexArray(null);
+                identidad(MatrizModelo);
+                gl.uniformMatrix4fv(uMatrizModelo, false, MatrizModelo);
+                gl.uniform4f(uColor,1.0/255.0,0.0/255.0, 4.0/255.0,1.0);
+                gl.bindVertexArray(this.trianguloVAO);
+                gl.drawArrays(gl.TRIANGLE_FAN, 422, 6);
+                gl.bindVertexArray(null);
+
+                identidad(MatrizModelo);
+                gl.uniformMatrix4fv(uMatrizModelo, false, MatrizModelo);
+                gl.uniform4f(uColor,242.0/255.0, 185.0/255.0, 92.0/255.0,1.0);
+                gl.bindVertexArray(this.trianguloVAO);
+                gl.drawArrays(gl.TRIANGLE_STRIP, 428, 9);
+                gl.bindVertexArray(null);
+                
+
+              }
+            }
+
+            
+            class Luna {
+                constructor(gl, radio) {
+        
+                    /* Las coordenadas cartesianas (x, y) */
+                    var vertices = [];
+
+                    /* Lee los vértices (x,y) y colores (r,g,b,a) */
+                    for (var i = 0; i < 360; i++) {
+                    vertices.push(radio * Math.cos(i * Math.PI / 180));
+                    vertices.push(radio * Math.sin(i * Math.PI / 180));
+                    }
+                    this.circuloVAO = gl.createVertexArray();
+                    gl.bindVertexArray(this.circuloVAO);
+                    var codigoVertices = gl.createBuffer();
+                    gl.bindBuffer(gl.ARRAY_BUFFER, codigoVertices);
+                    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW);
+                    gl.enableVertexAttribArray(0);
+                    gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+
+                    gl.bindVertexArray(null);
+                    gl.bindBuffer(gl.ARRAY_BUFFER, null);
+                }
+
+                dibuja(gl, llenado) {
+                  identidad(MatrizModelo);
+                  traslacion(MatrizModelo, 3,7,0);
+                  gl.uniformMatrix4fv(uMatrizModelo, false, MatrizModelo);
+                  gl.uniform4f(uColor, 202.0/255.0,48.0/255.0,83.0/255.0,1.0);
+                  gl.bindVertexArray(this.circuloVAO);
+                  gl.drawArrays((llenado) ? gl.TRIANGLE_FAN : gl.LINE_LOOP, 0, 360);
+                  gl.bindVertexArray(null);
+                }
+            }
+            function main(){
+                /***************************************************************************/
+                /* Paso 1: Se obtiene el contexto del WebGL 2.0                            */
+                /***************************************************************************/
+
+                var canvas = document.getElementById("webglcanvas");
+                var gl = canvas.getContext("webgl2", {antialias:true});
+                if (!gl) {
+                    document.write("Webgl no disponible en este navegador");
+                    return;
+                }
+                gl.viewport(0,0,gl.canvas.width, gl.canvas.height);
+
+                /***************************************************************************/
+                /* Paso 2: Se crean, compilan y enlazan los programas Shader               */
+                /***************************************************************************/
+
+                /* Se compila el shader de vertice */
+                var shaderDeVertice = gl.createShader(gl.VERTEX_SHADER);
+                gl.shaderSource(shaderDeVertice, document.getElementById("vs").text.trim());
+                gl.compileShader(shaderDeVertice);
+                if (!gl.getShaderParameter(shaderDeVertice, gl.COMPILE_STATUS)) {
+                    console.error(gl.getShaderInfoLog(shaderDeVertice));
+                }
+
+                /* Se compila el shader de fragmento */
+                var shaderDeFragmento = gl.createShader(gl.FRAGMENT_SHADER);
+                gl.shaderSource(shaderDeFragmento, document.getElementById("fs").text.trim());
+                gl.compileShader(shaderDeFragmento);
+                if (!gl.getShaderParameter(shaderDeFragmento, gl.COMPILE_STATUS)) {
+                    console.error(gl.getShaderInfoLog(shaderDeFragmento));
+                }
+
+                /* Se enlaza ambos shader */
+                var programaID = gl.createProgram();
+                gl.attachShader(programaID, shaderDeVertice); 
+                gl.attachShader(programaID, shaderDeFragmento);
+                gl.linkProgram(programaID);
+                if (!gl.getProgramParameter(programaID, gl.LINK_STATUS)) {
+                    console.error(gl.getProgramInfoLog(programaID));
+                }
+
+                /* Se instala el programa de shaders para utilizarlo */
+                gl.useProgram(programaID);
+
+                uMatrizProyeccion = gl.getUniformLocation(programaID, "uMatrizProyeccion");
+                uMatrizVista = gl.getUniformLocation(programaID, "uMatrizVista");
+                uMatrizModelo = gl.getUniformLocation(programaID, "uMatrizModelo");
+                uColor = gl.getUniformLocation(programaID, "uColor");
+
+                planeta = new Planeta(gl);
+                zorro = new Zorro(gl);
+                principe = new Principe(gl);
+                luna = new Luna(gl, 1.1);
+
+                gl.bindVertexArray(null);
+                gl.bindBuffer(gl.ARRAY_BUFFER, null);
+                gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, null);
+                // Se define la proyeccion
+                ortho(MatrizProyeccion, -10, 10, -10, 10, -10, 10);
+                gl.uniformMatrix4fv(uMatrizProyeccion, false, MatrizProyeccion);
+
+                // Matriz de Vista
+                identidad(MatrizVista);
+                gl.uniformMatrix4fv(uMatrizVista, false, MatrizVista);
+
+                gl.clearColor(10.0/255.0,10.0/255.0,50.0/255.0,1.0);
+                gl.clear(gl.COLOR_BUFFER_BIT);
+
+
+
+                planeta.dibuja(gl);
+                zorro.dibuja(gl);
+                principe.dibuja(gl);
+                luna.dibuja(gl,true);
+                //circulo.dibuja(gl, true);
+            }
+            window.onload = main;
+        </script>
+    </body>
+</html>

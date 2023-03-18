@@ -1,0 +1,251 @@
+<!DOCTYPE HTML>
+<html>
+<head>
+  <title>Cubo Color en WebGL 2.0</title>
+  <meta http-equiv="content-type" content="text/html;charset=utf-8">
+</head>
+   <body>
+      <div id="content">
+
+      <h2>Cubo Color en WebGL 2.0</h2>
+
+      <div id="tools">
+        <p><label><input type="checkbox" id="animacion"> <b>Animación</b></label></p>
+        <p><label><input type="checkbox" id="ocultamientoDeSuperficies"> Habilita el Buffer de Profundidad (DEPTH_TEST)</label></p>
+        <p><label><input type="checkbox" id="bufferDeProfundidad"> Limpia el Buffer de Profundidad (DEPTH_BUFFER)</label></p>
+      </div>
+
+      <div id="canvas-holder">
+        <canvas id="webglcanvas" style="border: none;" width="500" height="500"></canvas>
+      </div>
+
+      </div>
+
+      <!--
+        /***************************************************************************/
+        /* Se definen los códigos shaders.                                         */
+        /***************************************************************************/
+      -->
+      <script id="vs" type="vertex">
+        #version 300 es
+        uniform mat4 uMatrizProyeccion;
+        uniform mat4 uMatrizVista;
+        uniform mat4 uMatrizModelo;
+        layout(location = 0) in vec3 aVertices;
+        layout(location = 1) in vec4 aColores;
+        out vec4 vColores;
+        void main() {
+          vColores = aColores;  
+          gl_Position = uMatrizProyeccion * uMatrizVista * uMatrizModelo * vec4(aVertices, 1.0);
+        }
+      </script>
+
+      <script id="fs" type="fragment">
+        #version 300 es
+        precision highp float;
+        in vec4 vColores;
+        out vec4 color;
+        void main() {
+            color = vColores;
+        }
+      </script>
+	
+      <script src="../Objetos.js"></script>
+      <script src="../Transformaciones.js"></script>
+      <script>
+        "use strict";
+
+        /* Variables globales */
+        var programaID;
+        var gl;
+        var cubo;
+        var cono;
+        var cilindro;
+        /* Variables Uniformes */
+        var uMatrizProyeccion;
+        var uMatrizVista;
+        var uMatrizModelo;
+
+        /* Matrices */
+        var MatrizProyeccion = new Array(16);
+        var MatrizVista = new Array(16);
+        var MatrizModelo = new Array(16);
+
+        var MatrizModelo1 = new Array(16);
+        var MatrizModelo2 = new Array(16);
+        var MatrizModelo3 = new Array(16);
+
+        /* Incremento del ángulo de la animación */
+        var rotX = 0;
+        var rotY = 0;
+        var rotZ = 0;
+        const INCX = 0.3;
+        const INCY = 0.2;
+        const INCZ = 0.4;
+        var incX = 0;
+        var incY = 0;
+        var incZ = 0;
+
+        var animacion = false;
+
+        const PERIODO_MOVIMIENTO = 0.01; // 1/60 = 0.0167 (60 cuadros por seg.)
+        var tiempo_real;
+        var tiempoMovimiento = PERIODO_MOVIMIENTO;
+        var inicio = Date.now(); // Tiempo Inicial
+
+        /***************************************************************************/
+        /* Se renderizan todos los objetos                                         */
+        /***************************************************************************/
+        function dibuja() {
+
+          if (document.getElementById("bufferDeProfundidad").checked) {
+            /* Inicializa el buffer de color y de profundidad */
+            gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+          } else {
+            /* Inicializa el buffer de color */
+            gl.clear(gl.COLOR_BUFFER_BIT);
+          }
+
+          if (document.getElementById("ocultamientoDeSuperficies").checked) {
+            /* Habilita el ocultamiento de superficies */
+            gl.enable(gl.DEPTH_TEST);
+          } else {
+            /* Deshabilita el ocultamiento de superficies */
+            gl.disable(gl.DEPTH_TEST);
+          }
+
+          /* Matriz del Modelo */
+          identidad(MatrizModelo);
+          MatrizModelo1 = MatrizModelo.slice();
+          traslacion(MatrizModelo,-2,0,0);
+          rotacionX(MatrizModelo, rotX);
+          rotacionY(MatrizModelo, rotY);
+          rotacionZ(MatrizModelo, rotZ);
+          escalacion(MatrizModelo, 1, 1, 1);
+          
+          // Se envia la Matriz del Modelo al shader
+          gl.uniformMatrix4fv(uMatrizModelo, false, MatrizModelo);
+
+          /* Renderiza */
+          cilindro.dibuja(gl);
+          identidad(MatrizModelo);
+          MatrizModelo2 = MatrizModelo1.slice();
+          traslacion(MatrizModelo2,2,0,0);
+          rotacionX(MatrizModelo2, -rotX);
+          rotacionY(MatrizModelo2, -rotY);
+          rotacionZ(MatrizModelo2, -rotZ);
+          escalacion(MatrizModelo2, 1, 1, 1);
+          
+          // Se envia la Matriz del Modelo al shader
+          gl.uniformMatrix4fv(uMatrizModelo, false, MatrizModelo2);
+
+          /* Renderiza */
+          cubo.dibuja(gl);
+          identidad(MatrizModelo);
+          MatrizModelo = MatrizModelo1.slice();
+          traslacion(MatrizModelo,0,3,0);
+          rotacionX(MatrizModelo, rotX);
+          rotacionY(MatrizModelo, -rotY);
+          rotacionZ(MatrizModelo, rotZ);
+          escalacion(MatrizModelo, 1, 1, 1);
+          
+          // Se envia la Matriz del Modelo al shader
+          gl.uniformMatrix4fv(uMatrizModelo, false, MatrizModelo);
+
+          /* Renderiza */
+          cono.dibuja(gl);
+          /* Se efectua los incrementos para la animación */
+          var fin = Date.now(); // Tiempo Final
+          var duracion = fin - inicio;
+          inicio = fin;
+          tiempo_real = duracion / 1000.0;
+          tiempoMovimiento = tiempoMovimiento - tiempo_real;
+
+          if (tiempoMovimiento < 0.001) { 
+            tiempoMovimiento = PERIODO_MOVIMIENTO;
+            rotX = rotX + incX;
+            rotY = rotY + incY;
+            rotZ = rotZ + incZ;
+          }
+
+          /* Solicita que el navegador llame nuevamente a dibuja */
+          requestAnimationFrame(dibuja);
+
+        }
+
+        function animacionCheckbox() {
+          var r = document.getElementById("animacion").checked
+          if (r != animacion) {
+            animacion = r;
+            incX = incX == 0 ? INCY : 0;
+            incY = incY == 0 ? INCY : 0;
+            incZ = incZ == 0 ? INCZ : 0;
+            dibuja();
+          }
+        }
+
+        function main() {
+
+          /* Paso 1: Se prepara el lienzo y se obtiene el contexto del WebGL.        */
+          var canvas = document.getElementById("webglcanvas");
+
+          gl = canvas.getContext("webgl2");
+          if (!gl) {
+             document.write("WebGL 2.0 no está disponible en tu navegador");
+             return;
+          }
+
+          /* Para las casillas de verificación */
+          document.getElementById("animacion").checked = false;
+          document.getElementById("animacion").onchange = animacionCheckbox;
+          document.getElementById("ocultamientoDeSuperficies").checked = true;
+          document.getElementById("ocultamientoDeSuperficies").onchange = dibuja;
+          document.getElementById("bufferDeProfundidad").checked = true;
+          document.getElementById("bufferDeProfundidad").onchange = dibuja;
+
+          // Se define la ventana de despliegue
+          gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
+
+          /* Paso 2: Se crean, compilan y enlazan los programas Shader               */
+          compilaEnlazaLosShaders();
+
+          /* Paso 3: Se define la geometría y se almacenan en los buffers de memoria.*/
+          cubo = new Cubo(gl);
+          cono = new Cono(gl, 1, 0, 4, 24, true, true);
+          cilindro = new Cono(gl, 1, 1, 4, 24, true, true);
+          /* Paso 4: Se obtiene los ID de las variables de entrada de los shaders    */
+          // Se utiliza los shaders
+          gl.useProgram(programaID);
+
+          // Obtiene los ID de las variables de entrada de los shaders
+          uMatrizProyeccion = gl.getUniformLocation(programaID, "uMatrizProyeccion");
+          uMatrizVista = gl.getUniformLocation(programaID, "uMatrizVista");
+          uMatrizModelo = gl.getUniformLocation(programaID, "uMatrizModelo");
+
+          /* Paso 5: Se define la proyección                                        */
+          // Define la Matriz de Proyección
+          ortho(MatrizProyeccion, -5, 5, -5, 5, -5, 5);
+
+          // Se envia la Matriz de Proyección al shader
+          gl.uniformMatrix4fv(uMatrizProyeccion, false, MatrizProyeccion);
+
+          /* Paso 6: Se renderizan los objetos                                       */
+
+          /* Matriz del Vista */
+          identidad(MatrizVista);
+
+          // Se envia la Matriz de Vista al shader
+          gl.uniformMatrix4fv(uMatrizVista, false, MatrizVista);
+
+          // Color de fondo
+          gl.clearColor(0.0, 0.0, 0.0, 1.0);
+
+          dibuja();
+        }
+
+        /* Llama a main una vez que la página web se haya cargado. */
+        window.onload = main;
+
+      </script>
+   </body>
+</html>

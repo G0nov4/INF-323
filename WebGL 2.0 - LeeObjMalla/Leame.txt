@@ -1,0 +1,19 @@
+1. Instalar un servidor web o servidor HTTP en su máquina, 
+   para ejecutar del lado del servidor sus programas de WebGL,
+   que incluyan un archivo en su aplicación.
+
+   Ejemplos de servidores web que puede instalar en su máquina:
+   wampserver, appserv, apache, xampp, etc.
+
+2. Si ya se instaló adecuadamente un servidor web, copiar
+   los archivos:
+
+     LeeObjMalla.html y la carpeta Modelos (archivos .obj)
+
+   en la carpeta www, que se encuentra dentro de la 
+   carpeta del servidor web (ya instalado!).
+
+3. Escribir en el navegador:
+
+	http://localhost/LeeObjMalla.html
+

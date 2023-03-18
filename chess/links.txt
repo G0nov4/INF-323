@@ -1,0 +1,4 @@
+https://www.freecodecamp.org/news/simple-chess-ai-step-by-step-1d55a9266977/
+https://www.openbookproject.net/py4fun/minimax/minimax.html
+https://www2.seas.gwu.edu/~simhaweb/champalg/chess/chess.html
+https://www.naftaliharris.com/blog/chess/

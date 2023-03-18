@@ -1,0 +1,846 @@
+﻿<!DOCTYPE HTML>
+<html>
+<head>
+      <title>Chess en WebGL 2.0</title>
+      <meta http-equiv="content-type" content="text/html;charset=utf-8">
+</head>
+<body>
+      <h2>Chess en WebGL 2.0</h2>
+      <canvas id="webglcanvas" style="border: none;" width="500" height="500"></canvas>
+      <noscript><p><b>Lo siento, pero ésta página requiere JavaScript.</b></p></noscript>
+      <!--
+        /***************************************************************************/
+        /* Se definen los códigos shaders.                                 */
+        /***************************************************************************/
+      -->
+      <script id="vs" type="vertex">
+        #version 300 es
+        uniform mat4 uMatrizProyeccion;
+        uniform mat4 uMatrizVista;
+        uniform mat4 uMatrizModelo;
+        layout(location = 0) in vec2 aVertices;
+        void main() {
+          gl_Position = uMatrizProyeccion * uMatrizVista * uMatrizModelo * vec4(aVertices, 0.0, 1.0);
+        }
+      </script>
+
+      <script id="fs" type="fragment">
+        #version 300 es
+        precision mediump float;
+        uniform vec4 uColor;
+        out vec4 color;
+        void main() {
+            color = uColor;
+        }
+      </script>
+	
+      <script>
+        "use strict";
+
+        /* Variables globales */
+        var programaID;
+        var gl;
+        var canvas;        
+        var tablero;
+        var peon;
+        var rey;
+        var reina;
+        var alfil;
+        var caballo;
+        var torre;
+
+        /* Datos del Tablero */
+        const TAM_CASILLA = 2;
+        var primera_eleccion = true;
+        var fila_casilla_1, col_casilla_1; /* origen */
+        var fila_casilla_2, col_casilla_2; /* destino */
+        var pieza;
+
+        var tableroMat = [
+          ["T","C","A","R","Y","A","C","T"],
+          ["P","P","P","P","P","P","P","P"],
+          [" "," "," "," "," "," "," "," "],
+          [" "," "," "," "," "," "," "," "],
+          [" "," "," "," "," "," "," "," "],
+          [" "," "," "," "," "," "," "," "],
+          ["p","p","p","p","p","p","p","p"],
+          ["t","c","a","r","y","a","c","t"]];        
+
+        /* Arreglo para los datos de la interpolación */ 
+        var posicion = [];
+        var ipos; // Indice del Arreglo de la posición
+
+        /* Ancho y Alto (ventana) */
+        const ANCHO = 500;
+        const ALTO = 500;
+
+        /* Variables Uniformes */
+        var uColor;
+        var uMatrizProyeccion;
+        var uMatrizVista;
+        var uMatrizModelo;
+
+        /* Matrices */
+        var MatrizProyeccion = new Array(16);
+        var MatrizVista = new Array(16);
+        var MatrizModelo = new Array(16);
+
+        /* Incremento del ángulo de la animación */
+        var animacion = false;
+        const PERIODO_DE_LA_ANIMACION = 0.0167; // 1/60 = 0.0167 (60 cuadros por 1 seg.)
+        var tiempo_real;
+        var tiempoAnimacion = PERIODO_DE_LA_ANIMACION;
+        var inicio = Date.now(); // Tiempo Inicial
+
+        /***************************************************************************/
+        /* Se crean, compilan y enlazan los programas Shader                       */
+        /***************************************************************************/
+        function compilaEnlazaLosShaders() {
+
+          /* Se compila el shader de vertice */
+          var shaderDeVertice = gl.createShader(gl.VERTEX_SHADER);
+          gl.shaderSource(shaderDeVertice, document.getElementById("vs").text.trim());
+          gl.compileShader(shaderDeVertice);
+          if (!gl.getShaderParameter(shaderDeVertice, gl.COMPILE_STATUS)) {
+             console.error(gl.getShaderInfoLog(shaderDeVertice));
+          }
+
+          /* Se compila el shader de fragmento */
+          var shaderDeFragmento = gl.createShader(gl.FRAGMENT_SHADER);
+          gl.shaderSource(shaderDeFragmento, document.getElementById("fs").text.trim());
+          gl.compileShader(shaderDeFragmento);
+          if (!gl.getShaderParameter(shaderDeFragmento, gl.COMPILE_STATUS)) {
+             console.error(gl.getShaderInfoLog(shaderDeFragmento));
+          }
+
+          /* Se enlaza ambos shader */
+          programaID = gl.createProgram();
+          gl.attachShader(programaID, shaderDeVertice); 
+          gl.attachShader(programaID, shaderDeFragmento);
+          gl.linkProgram(programaID);
+          if (!gl.getProgramParameter(programaID, gl.LINK_STATUS)) {
+             console.error(gl.getProgramInfoLog(programaID));
+          }
+
+          /* Se instala el programa de shaders para utilizarlo */
+          gl.useProgram(programaID);
+        }
+
+        /***************************************************************************/
+        /* Transformaciones mediante matrices                                      */
+        /***************************************************************************/
+
+        /* Convierte de grados a radianes */
+        function toRadians(grados) {
+          return grados * Math.PI / 180;
+        };
+
+        /* Matriz Identidad */
+        function identidad(r) {
+          r[0] = 1; r[4] = 0; r[ 8] = 0; r[12] = 0;
+          r[1] = 0; r[5] = 1; r[ 9] = 0; r[13] = 0;
+          r[2] = 0; r[6] = 0; r[10] = 1; r[14] = 0;
+          r[3] = 0; r[7] = 0; r[11] = 0; r[15] = 1;
+        }
+
+        /* Traslación - glTranslatef */
+        function traslacion(matriz, tx, ty, tz) {
+          var r = new Array(16);
+          r[0] = 1; r[4] = 0; r[ 8] = 0; r[12] = tx;
+          r[1] = 0; r[5] = 1; r[ 9] = 0; r[13] = ty;
+          r[2] = 0; r[6] = 0; r[10] = 1; r[14] = tz;
+          r[3] = 0; r[7] = 0; r[11] = 0; r[15] =  1;
+          multiplica(matriz, matriz, r);
+        }
+
+        /* Escalación - glScalef */
+        function escalacion(matriz, sx, sy, sz) { 
+          var r = new Array(16);
+          r[0] = sx; r[4] =  0; r[ 8] =  0; r[12] =  0;
+          r[1] =  0; r[5] = sy; r[ 9] =  0; r[13] =  0;
+          r[2] =  0; r[6] =  0; r[10] = sz; r[14] =  0;
+          r[3] =  0; r[7] =  0; r[11] =  0; r[15] =  1;
+          multiplica(matriz, matriz, r);
+        }
+
+        /* Rotación sobre X - glRotatef */
+        function rotacionX(matriz, theta){
+          let r = new Array(16);
+          var c = Math.cos(toRadians(theta));
+          var s = Math.sin(toRadians(theta));
+          r[0] =  1; r[4] =  0; r[ 8] =  0; r[12] = 0;
+          r[1] =  0; r[5] =  c; r[ 9] = -s; r[13] = 0;
+          r[2] =  0; r[6] =  s; r[10] =  c; r[14] = 0;
+          r[3] =  0; r[7] =  0; r[11] =  0; r[15] = 1;
+          multiplica(matriz, matriz, r); 
+        }
+
+        /* Rotación sobre Y - glRotatef */
+        function rotacionY(matriz, theta){
+          let r = new Array(16);
+          var c = Math.cos(toRadians(theta));
+          var s = Math.sin(toRadians(theta));
+          r[0] =  c; r[4] =  0; r[ 8] =  s; r[12] = 0;
+          r[1] =  0; r[5] =  1; r[ 9] =  0; r[13] = 0;
+          r[2] = -s; r[6] =  0; r[10] =  c; r[14] = 0;
+          r[3] =  0; r[7] =  0; r[11] =  0; r[15] = 1;
+          multiplica(matriz, matriz, r);
+        }
+	
+        /* Rotación sobre Z - glRotatef */
+        function rotacionZ(matriz, theta){
+          let r = new Array(16);
+          var c = Math.cos(toRadians(theta));
+          var s = Math.sin(toRadians(theta));
+          r[0] =  c; r[4] = -s; r[ 8] =  0; r[12] = 0;
+          r[1] =  s; r[5] =  c; r[ 9] =  0; r[13] = 0;
+          r[2] =  0; r[6] =  0; r[10] =  1; r[14] = 0;
+          r[3] =  0; r[7] =  0; r[11] =  0; r[15] = 1;
+          multiplica(matriz, matriz, r);
+        }
+
+        /* Proyección Paralela - glOrtho */
+        function ortho(r, izq, der, abj, arr, cerca, lejos) {
+          r[0] = 2/(der - izq); r[4] =             0; r[ 8] =                  0; r[12] =         -(der + izq)/(der - izq);
+          r[1] =             0; r[5] = 2/(arr - abj); r[ 9] =                  0; r[13] =         -(arr + abj)/(arr - abj);
+          r[2] =             0; r[6] =             0; r[10] = -2/(lejos - cerca); r[14] = -(lejos + cerca)/(lejos - cerca);
+          r[3] =             0; r[7] =             0; r[11] =                  0; r[15] =                                1;
+        }
+
+        /* Proyección Perspectiva - glFrustum */
+        function frustum(r, izq, der, abj, arr, cerca, lejos) {
+          r[0] = 2*cerca/(der-izq); r[4] =                 0; r[ 8] =          (der+izq)/(der-izq); r[12] =                            0;
+          r[1] =                 0; r[5] = 2*cerca/(arr-abj); r[ 9] =          (arr+abj)/(arr-abj); r[13] =                            0;
+          r[2] =                 0; r[6] =                 0; r[10] = -(lejos+cerca)/(lejos-cerca); r[14] = -2*lejos*cerca/(lejos-cerca);
+          r[3] =                 0; r[7] =                 0; r[11] =                           -1; r[15] =                            0;
+        }
+
+        /* Proyección Perspectiva - gluPerspective */
+        function perspective(r, fovy, aspecto, cerca, lejos) {
+          var ang = fovy * 0.5;
+          var f = (Math.abs(Math.sin(toRadians(ang))) < 1e-8 ? 0 : 1) / Math.tan(toRadians(ang));
+          r[0] = f/aspecto; r[4] = 0; r[ 8] =                                  0; r[12] =                                       0;
+          r[1] =         0; r[5] = f; r[ 9] =                                  0; r[13] =                                       0;
+          r[2] =         0; r[6] = 0; r[10] = -(lejos + cerca) / (lejos - cerca); r[14] =  -2.0 * lejos * cerca / (lejos - cerca);
+          r[3] =         0; r[7] = 0; r[11] =                              - 1.0; r[15] =                                       0;
+        }
+
+        /* Multiplicación de matrices de 4 x 4 */
+        function multiplica(c, a, b) {
+          let r = new Array(16);
+          let i, j, k;
+          for (i = 0; i < 4; i++){
+            for (j = 0; j < 4; j++){
+              let s = 0;
+              for (k = 0; k < 4; k++)
+                s = s + a[i + k * 4] * b[k + j * 4];
+                r[i + j * 4] = s;
+              }
+            }
+          for (i = 0; i < 16; i++)
+            c[i] = r[i];
+        }
+
+        /***********************************************************************************/
+        /* Se define la geometría y se almacenan en los buffers de memoria y se renderiza. */
+        /***********************************************************************************/
+        class Tablero {
+          constructor(gl) {
+
+            /* Las coordenadas cartesianas (x, y) */
+            var vertices = new Float32Array(9 * 9 * 2);
+
+            var k = 0;
+            var x;
+            var y = 0;
+
+            for(let i = 0; i <= 8; i++){
+              x = 0;
+              for(let j = 0; j <= 8; j++){
+                vertices[k++] = x;
+                vertices[k++] = y;
+                x = x + 2;
+              }
+              y = y + 2;
+            }
+
+            k = 0;
+                        /**
+             *    k2 ------- k2+1
+             *     |     / | 
+             *     |   /   |
+             *     | /     |
+             *    k1 ------ k1 + 1
+             *    0,3, 3,1, 1,0  0,2, 2,3, 3,0   =>  12 indices
+             */
+            /* Indices */
+            var indices = new Float32Array(4 * 8 * 8);
+            var k1 = 0;    // 1er indice del vertice de abajo
+            var k2 = 9;    // 1er indice del vertice de arriba
+            for(let i = 0; i < 8; i++){
+              for(let j = 0; j < 8; j++){
+                indices[k++] = k1;
+                indices[k++] = k1 + 1;
+                indices[k++] = k2 + 1;
+                indices[k++] = k2;
+                k1++;
+                k2++;
+              }
+              k1++;
+              k2++;
+            }
+            /*
+            console.log(vertices.length);
+            for (var i = 0; i < vertices.length; i+=2) {
+              console.log(i + " : " + vertices[i] + "  " + vertices[i+1])
+            }
+
+            console.log(indices.length);
+            for (var i = 0; i < indices.length; i+=4) {
+              console.log(i + " : " + indices[i] + "  " + indices[i+1] + "  " + indices[i+2] + "  " + indices[i+3])
+            }
+            */
+            this.tableroVAO = gl.createVertexArray();
+            gl.bindVertexArray(this.tableroVAO);
+
+            var codigoVertices = gl.createBuffer();
+            gl.bindBuffer(gl.ARRAY_BUFFER, codigoVertices);
+            gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW);
+            gl.enableVertexAttribArray(0);
+            gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+
+            var indiceBuffer = gl.createBuffer();
+            gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indiceBuffer);
+            gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(indices), gl.STATIC_DRAW);
+
+            gl.bindVertexArray(null);
+            gl.bindBuffer(gl.ARRAY_BUFFER, null);
+            gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, null);
+
+          }
+
+          dibuja(gl) {
+            let sw = true;
+            let desplazamiento = 0;
+            for(let i = 0; i < 8; i++){
+              for(let j = 0; j < 8; j++){
+                if (sw) {
+                  /* Dibuja un cuadro */
+                  gl.bindVertexArray(this.tableroVAO);
+                  gl.uniform4f(uColor, 218/255, 176/255, 127/255, 1);
+                  gl.drawElements(gl.TRIANGLE_FAN, 4, gl.UNSIGNED_SHORT, desplazamiento);
+                } else { 
+                  /* Dibuja un cuadro */
+                  gl.bindVertexArray(this.tableroVAO);
+                  gl.uniform4f(uColor, 139/255, 95/255, 55/255, 1);
+                  gl.drawElements(gl.TRIANGLE_FAN, 4, gl.UNSIGNED_SHORT, desplazamiento);
+                }
+                sw = !sw;
+                desplazamiento += 8; // 8 bytes
+              }
+              sw = !sw;
+            }
+            gl.bindVertexArray(null);
+
+          }
+        }
+
+        class Peon {
+          constructor(gl) {
+
+            /* Las coordenadas cartesianas (x, y) */
+            var vertices = [
+              1.0, 1.14,
+              1.6, 0.4,
+              0.4, 0.4,
+            ];
+
+            /* Cabeza */
+
+            var verticesCabeza = new Float32Array(360 * 2);
+
+            // Desplazamiento (1.0, 1.42)
+            let radio = 0.28;
+            let k = 0;
+            /* Lee los vértices (x,y) */
+            for (var i = 0; i < 360; i++) {
+              verticesCabeza[k++] = 1.0 + radio * Math.cos(i * Math.PI / 180);
+              verticesCabeza[k++] = 1.42 + radio * Math.sin(i * Math.PI / 180);
+            }
+
+            this.peonVAO = gl.createVertexArray();
+            gl.bindVertexArray(this.peonVAO);
+
+            var codigoVertices = gl.createBuffer();
+            gl.bindBuffer(gl.ARRAY_BUFFER, codigoVertices);
+            gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW);
+            gl.enableVertexAttribArray(0);
+            gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+
+            this.cabezaVAO = gl.createVertexArray();
+            gl.bindVertexArray(this.cabezaVAO);
+
+            var codigoVerticesCabeza = gl.createBuffer();
+            gl.bindBuffer(gl.ARRAY_BUFFER, codigoVerticesCabeza);
+            gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(verticesCabeza), gl.STATIC_DRAW);
+            gl.enableVertexAttribArray(0);
+            gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+
+            gl.bindVertexArray(null);
+            gl.bindBuffer(gl.ARRAY_BUFFER, null);
+
+          }
+
+          dibuja(gl, r, g, b) {
+
+            /* Dibuja el cuerpo */
+
+            gl.bindVertexArray(this.peonVAO);
+            gl.uniform4f(uColor, r, g, b, 1);
+            gl.drawArrays(gl.TRIANGLES, 0, 3);
+
+            /* Dibuja la cabeza */
+
+            gl.bindVertexArray(this.cabezaVAO);
+            gl.drawArrays(gl.TRIANGLE_FAN, 0, 360);
+
+            gl.bindVertexArray(null);
+
+          }
+        }
+
+        class Rey {
+          constructor(gl) {
+
+            /* Las coordenadas cartesianas (x, y) */
+            var vertices = [
+              1+0.6,1-0.75,
+              1-0.6,1-0.75,
+              1-0.6,1-0.25,
+              1-0.6,1-0.25,
+              1+0.6,1-0.25,
+              1+0.6,1-0.75,
+              1-0.6,1-0.25,
+              1-0.6,1+0.25,
+              1-0.2,1-0.25,
+              1-0.2,1-0.25,
+              1+0.0,1+0.25,
+              1+0.2,1-0.25,
+              1+0.2,1-0.25,
+              1+0.6,1+0.25,
+              1+0.6,1-0.25,
+
+              1+0.0,1+0.25,
+              1+0.0,1+0.75,
+              1-0.25,1+0.5,
+              1+0.25,1+0.5
+            ];
+
+            this.reyVAO = gl.createVertexArray();
+            gl.bindVertexArray(this.reyVAO);
+
+            var codigoVertices = gl.createBuffer();
+            gl.bindBuffer(gl.ARRAY_BUFFER, codigoVertices);
+            gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW);
+            gl.enableVertexAttribArray(0);
+            gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+
+            gl.bindVertexArray(null);
+            gl.bindBuffer(gl.ARRAY_BUFFER, null);
+
+          }
+
+          dibuja(gl, r, g, b) {
+
+            /* Dibuja el cuerpo */
+
+            gl.bindVertexArray(this.reyVAO);
+            gl.uniform4f(uColor, r, g, b, 1);
+            gl.drawArrays(gl.TRIANGLES, 0, 15);
+            gl.drawArrays(gl.LINES, 15, 4);
+
+            gl.bindVertexArray(null);
+
+          }
+        }
+
+        class Reina {
+          constructor(gl) {
+
+            /* Las coordenadas cartesianas (x, y) */
+            var vertices = [
+              1-0.4,1-0.75,
+              1-0.4,1-0.25,
+              1+0.4,1-0.75,
+              1+0.4,1-0.75,
+              1-0.4,1-0.25,
+              1+0.4,1-0.25,
+              1-0.0,1-0.25,
+              1-0.4,1-0.25,
+              1-0.8,1+0.35,
+              1-0.0,1-0.25,
+              1-0.4,1-0.25,
+              1-0.4,1+0.65,
+              1-0.2,1-0.25,
+              1+0.2,1-0.25,
+              1-0.0,1+0.95,
+              1+0.0,1-0.25,
+              1+0.4,1-0.25,
+              1+0.4,1+0.65,
+              1+0.0,1-0.25,
+              1+0.4,1-0.25,
+              1+0.8,1+0.35
+            ];
+
+            this.reinaVAO = gl.createVertexArray();
+            gl.bindVertexArray(this.reinaVAO);
+
+            var codigoVertices = gl.createBuffer();
+            gl.bindBuffer(gl.ARRAY_BUFFER, codigoVertices);
+            gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW);
+            gl.enableVertexAttribArray(0);
+            gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+
+            gl.bindVertexArray(null);
+            gl.bindBuffer(gl.ARRAY_BUFFER, null);
+
+          }
+
+          dibuja(gl, r, g, b) {
+
+            /* Dibuja el cuerpo */
+
+            gl.bindVertexArray(this.reinaVAO);
+            gl.uniform4f(uColor, r, g, b, 1);
+            gl.drawArrays(gl.TRIANGLES, 0, 21);
+
+            gl.bindVertexArray(null);
+
+          }
+        }
+
+        class Alfil {
+          constructor(gl) {
+
+            /* Las coordenadas cartesianas (x, y) */
+            var vertices = [
+              1-0.5,1+0.25,
+              1+0,1+0.75,
+              1+0.5,1+0.25,
+              1-0.5,1+0.25,
+              1+0.5,1+0.25,
+              1+0,1-0.5,
+              1+0,1-0.5,
+              1+0.5,1-0.75,
+              1-0.5,1-0.75
+            ];
+
+            this.alfilVAO = gl.createVertexArray();
+            gl.bindVertexArray(this.alfilVAO);
+
+            var codigoVertices = gl.createBuffer();
+            gl.bindBuffer(gl.ARRAY_BUFFER, codigoVertices);
+            gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW);
+            gl.enableVertexAttribArray(0);
+            gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+
+            gl.bindVertexArray(null);
+            gl.bindBuffer(gl.ARRAY_BUFFER, null);
+
+          }
+
+          dibuja(gl, r, g, b) {
+
+            /* Dibuja el cuerpo */
+
+            gl.bindVertexArray(this.alfilVAO);
+            gl.uniform4f(uColor, r, g, b, 1);
+            gl.drawArrays(gl.TRIANGLES, 0, 9);
+
+            gl.bindVertexArray(null);
+
+          }
+        }
+
+        class Caballo {
+          constructor(gl) {
+
+            /* Las coordenadas cartesianas (x, y) */
+            var vertices = [
+              1-0.5,1-0.75,
+              1+0.5,1+0.75,
+              1+0.75,1-0.75,
+              1+0.5,1+0.75,
+              1+0.5,1+0.5,
+              1-0.25,1+0.75,
+              1-0.25,1+0.75,
+              1+0.5,1+0.5,
+              1-0.25,1+0.0,
+              1-0.25,1+0.0,
+              1-0.75,1+0.0,
+              1-0.25,1+0.75,
+            ];
+
+            this.caballoVAO = gl.createVertexArray();
+            gl.bindVertexArray(this.caballoVAO);
+
+            var codigoVertices = gl.createBuffer();
+            gl.bindBuffer(gl.ARRAY_BUFFER, codigoVertices);
+            gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW);
+            gl.enableVertexAttribArray(0);
+            gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+
+            gl.bindVertexArray(null);
+            gl.bindBuffer(gl.ARRAY_BUFFER, null);
+
+          }
+
+          dibuja(gl, r, g, b) {
+
+            /* Dibuja el cuerpo */
+
+            gl.bindVertexArray(this.caballoVAO);
+            gl.uniform4f(uColor, r, g, b, 1);
+            gl.drawArrays(gl.TRIANGLES, 0, 12);
+
+            gl.bindVertexArray(null);
+
+          }
+        }
+
+        class Torre {
+          constructor(gl) {
+
+            /* Las coordenadas cartesianas (x, y) */
+            var vertices = [
+              1-0.5,1+0.3,
+              1+0.5,1-0.75,
+              1-0.5,1-0.75,
+              1-0.5,1+0.3,
+              1+0.5,1+0.3,
+              1+0.5,1-0.75,
+              1-0.6,1+0.0,
+              1-0.6,1+0.7,
+              1-0.36,1+0.0,
+              1-0.36,1+0.0,
+              1-0.6,1+0.7,
+              1-0.36,1+0.7,
+              1+0.12,1+0.0,
+              1-0.12,1+0.0,
+              1-0.12,1+0.7,
+              1+0.12,1+0.0,
+              1-0.12,1+0.7,
+              1+0.12,1+0.7,
+              1+0.6,1+0.0,
+              1+0.6,1+0.7,
+              1+0.36,1+0.0,
+              1+0.36,1+0.0,
+              1+0.6,1+0.7,
+              1+0.36,1+0.7
+            ];
+
+            this.torreVAO = gl.createVertexArray();
+            gl.bindVertexArray(this.torreVAO);
+
+            var codigoVertices = gl.createBuffer();
+            gl.bindBuffer(gl.ARRAY_BUFFER, codigoVertices);
+            gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW);
+            gl.enableVertexAttribArray(0);
+            gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+
+            gl.bindVertexArray(null);
+            gl.bindBuffer(gl.ARRAY_BUFFER, null);
+
+          }
+
+          dibuja(gl, r, g, b) {
+
+            /* Dibuja el cuerpo */
+
+            gl.bindVertexArray(this.torreVAO);
+            gl.uniform4f(uColor, r, g, b, 1);
+            gl.drawArrays(gl.TRIANGLES, 0, 24);
+
+            gl.bindVertexArray(null);
+
+          }
+        }
+
+        function interpolacionLineal(x0,y0,z0,x1,y1,z1){
+          posicion = [];
+          for (var i = 0; i < 30; i++){
+            var t = i / 30;
+            posicion[i] = [];
+            posicion[i][0] = x0*(1-t) + x1*t;
+            posicion[i][1] = y0*(1-t) + y1*t;
+            posicion[i][2] = z0*(1-t) + z1*t;
+          }
+        }
+
+        function mouseDown(event) {
+          var posx = new Number();
+          var posy = new Number();
+
+          /* Obtiene la coordenada dentro de la área mayor */
+          if (event.x != undefined && event.y != undefined) {
+            posx = event.x;
+            posy = event.y;
+          } else {
+            posx = event.clientX + document.body.scrollLeft + document.documentElement.scrollLeft;
+            posy = event.clientY + document.body.scrollTop + document.documentElement.scrollTop;
+          }
+
+          /* Obtiene la coordenada dentro del canvas */
+          posx = posx - canvas.offsetLeft;
+          posy = posy - canvas.offsetTop;
+
+          /* En coordenadas del OpenGL */
+          posx = ((posx / ANCHO) * 16);
+          posy = ((1- posy / ALTO) * 16);
+
+          if (primera_eleccion) {
+            /* Obtiene fila y columna de la primera casilla elegida */
+            fila_casilla_1 = Math.trunc(posy / TAM_CASILLA);
+            col_casilla_1  = Math.trunc(posx / TAM_CASILLA);
+            /* Guarda la pieza elegida */
+            pieza = tableroMat[fila_casilla_1][col_casilla_1];
+            primera_eleccion = false;
+          } else {
+            tableroMat[fila_casilla_1][col_casilla_1] = " ";
+            /* Obtiene fila y columna de la segunda casilla elegida */
+            fila_casilla_2 = Math.trunc(posy / TAM_CASILLA);
+            col_casilla_2 = Math.trunc(posx / TAM_CASILLA);
+            /* Recupera la pieza elegida */
+            tableroMat[fila_casilla_2][col_casilla_2] = pieza;
+            primera_eleccion = true;
+            
+            /* Obtiene la interpolación entre ambas casillas */
+            interpolacionLineal(fila_casilla_1, col_casilla_1, 0,fila_casilla_2, col_casilla_2, 0)
+            /* Posición inicial del vector de la interpolación */
+            ipos = 0; 
+          }
+
+          dibuja();
+        }
+
+        /***************************************************************************/
+        /* Se renderizan todos los objetos                                         */
+        /***************************************************************************/
+
+        let _MatrizModelo = new Array(16);
+        function dibuja() {
+
+          gl.clear(gl.COLOR_BUFFER_BIT);
+
+          identidad(MatrizModelo);
+          gl.uniformMatrix4fv(uMatrizModelo, false, MatrizModelo);
+          tablero.dibuja(gl);
+          for(let i = 0; i < 8; i++) {
+            for(let j = 0; j < 8; j++) {
+              _MatrizModelo = MatrizModelo.slice();  // Copia Matriz
+
+              /* Se verifica si se eligio la segunda casilla para efectuar la animación  */
+              if (i == fila_casilla_2 && j == col_casilla_2 && ipos < 30){
+
+                /* Traslada paso a paso, siguiendo los datos de la interpolación */
+                traslacion(_MatrizModelo, posicion[ipos][1]*2, posicion[ipos][0]*2, posicion[ipos][2]);
+
+                /* Se efectua los incrementos para la animación */
+                var fin = Date.now(); // Tiempo Final
+                var duracion = fin - inicio;
+                inicio = fin;
+                tiempo_real = duracion / 1000.0;
+                tiempoAnimacion = tiempoAnimacion - tiempo_real;
+
+                if (tiempoAnimacion < 0.001) {
+                  tiempoAnimacion = PERIODO_DE_LA_ANIMACION;
+
+                  /* Incrementa */
+                  ipos = ipos + 1;
+                }
+              } else  
+                traslacion(_MatrizModelo, j*2, i*2, 0);
+
+              gl.uniformMatrix4fv(uMatrizModelo, false, _MatrizModelo);
+
+              if (tableroMat[i][j] === "P")
+                peon.dibuja(gl, 1, 1, 1);
+              else if (tableroMat[i][j] === "p")
+                peon.dibuja(gl, 0, 0, 0);
+              else if (tableroMat[i][j] === "T")
+                torre.dibuja(gl, 1, 1, 1);
+              else if (tableroMat[i][j] === "t")
+                torre.dibuja(gl, 0, 0, 0);
+              else if (tableroMat[i][j] === "C")
+                caballo.dibuja(gl, 1, 1, 1);
+              else if (tableroMat[i][j] === "c")
+                caballo.dibuja(gl, 0, 0, 0);
+              else if (tableroMat[i][j] === "A")
+                alfil.dibuja(gl, 1, 1, 1);
+              else if (tableroMat[i][j] === "a")
+                alfil.dibuja(gl, 0, 0, 0);
+              else if (tableroMat[i][j] === "R")
+                reina.dibuja(gl, 1, 1, 1);
+              else if (tableroMat[i][j] === "r")
+                reina.dibuja(gl, 0, 0, 0);
+              else if (tableroMat[i][j] === "Y")
+                rey.dibuja(gl, 1, 1, 1);
+              else if (tableroMat[i][j] === "y")
+                rey.dibuja(gl, 0, 0, 0);                                                                          
+            }
+          }
+          /* Solicita que el navegador llame nuevamente a dibuja */
+          requestAnimationFrame(dibuja);
+        }
+
+        /***************************************************************************/
+        /* Se prepara el lienzo y se obtiene el contexto del WebGL.                */
+        /***************************************************************************/
+        function main() {
+          canvas = document.getElementById("webglcanvas");
+
+          gl = canvas.getContext("webgl2");
+          if (!gl) {
+             document.write("WebGL 2.0 no está disponible en tu navegador");
+             return;
+          }
+
+          gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
+
+          canvas.addEventListener("mousedown", mouseDown, false);
+
+          compilaEnlazaLosShaders();
+
+          /* Se crean los objetos */
+          tablero = new Tablero(gl);
+          peon = new Peon(gl);
+          rey = new Rey(gl);
+          reina = new Reina(gl);
+          alfil = new Alfil(gl);
+          caballo = new Caballo(gl);
+          torre = new Torre(gl);
+
+          gl.useProgram(programaID);
+          uColor = gl.getUniformLocation(programaID, "uColor");
+          uMatrizProyeccion = gl.getUniformLocation(programaID, "uMatrizProyeccion");
+          uMatrizVista = gl.getUniformLocation(programaID, "uMatrizVista");
+          uMatrizModelo = gl.getUniformLocation(programaID, "uMatrizModelo");
+
+          ortho(MatrizProyeccion, 0, 16, 0, 16, -5, 5);
+          gl.uniformMatrix4fv(uMatrizProyeccion, false, MatrizProyeccion);
+
+          identidad(MatrizVista);
+          gl.uniformMatrix4fv(uMatrizVista, false, MatrizVista);
+
+          gl.clearColor(0.0, 0.0, 0.0, 1.0);
+
+          dibuja();
+
+        }
+
+        /* Llama a main una vez que la página web se haya cargado. */
+        window.onload = main;
+
+      </script>
+</body>
+</html>
